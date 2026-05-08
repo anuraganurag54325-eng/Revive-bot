@@ -11,7 +11,7 @@ from pyrogram.errors import UserNotParticipant
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
 
-# --- KEEP-ALIVE LOGIC (Fixed for Bot Start) ---
+# --- KEEP-ALIVE LOGIC ---
 web = Flask('')
 @web.route('/')
 def home(): return "Bot is Running!"
@@ -22,7 +22,7 @@ def run_web():
 
 def keep_alive():
     t = Thread(target=run_web)
-    t.daemon = True # Isse Flask background mein chalega aur bot ko block nahi karega
+    t.daemon = True 
     t.start()
 
 # --- CONFIGURATION ---
@@ -42,7 +42,14 @@ videos, premium_users, payments = db["videos"], db["premium_users"], db["payment
 
 app.batch_data = {}
 
-# --- FORCE JOIN ---
+# --- UPDATED 3 PLANS ONLY ---
+PLANS = {
+    "15d": {"days": 15, "price": 86},
+    "30d": {"days": 30, "price": 144},
+    "100d": {"days": 100, "price": 333}
+}
+
+# --- HELPERS ---
 async def check_join(client, user_id):
     try:
         await client.get_chat_member(CHANNEL_USERNAME, user_id)
@@ -84,25 +91,25 @@ async def start(client, message):
 @app.on_callback_query()
 async def cb(client, query):
     if query.data == "premium":
-        btns = [[InlineKeyboardButton(f"7 Days - ₹19", callback_data="buy_7d")],
-                [InlineKeyboardButton(f"15 Days - ₹29", callback_data="buy_15d")],
-                [InlineKeyboardButton(f"30 Days - ₹39", callback_data="buy_30d")],
-                [InlineKeyboardButton(f"100 Days - ₹99", callback_data="buy_100d")]]
+        btns = [[InlineKeyboardButton(f"{v['days']} Days - ₹{v['price']}", callback_data=f"buy_{k}")] for k, v in PLANS.items()]
         await query.message.reply_text("💎 **Choose Plan:**", reply_markup=InlineKeyboardMarkup(btns))
     elif query.data.startswith("buy_"):
-        days = query.data.split("_")[1]
-        price = {"7d":"19", "15d":"29", "30d":"39", "100d":"99"}[days]
+        plan_key = query.data.replace("buy_", "")
+        plan = PLANS[plan_key]
         pid = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-        qr = qrcode.make(f"upi://pay?pa={UPI_ID}&pn=Premium&am={price}&cu=INR&tn={pid}")
+        
+        qr_data = f"upi://pay?pa={UPI_ID}&pn=Premium&am={plan['price']}&cu=INR&tn={pid}"
+        qr = qrcode.make(qr_data)
         bio = BytesIO(); bio.name = "p.png"; qr.save(bio, "PNG"); bio.seek(0)
-        await payments.insert_one({"user_id": query.from_user.id, "payment_id": pid, "days": int(days[:-1])})
+        
+        await payments.insert_one({"user_id": query.from_user.id, "payment_id": pid, "days": plan["days"]})
         
         await query.message.reply_photo(
             photo=bio, 
             caption=(
                 f"💎 Premium Plan Request\n\n"
-                f"Plan: {days.replace('d', ' Days')}\n"
-                f"Amount: ₹{price}\n"
+                f"Plan: {plan['days']} Days\n"
+                f"Amount: ₹{plan['price']}\n"
                 f"Payment ID: {pid}\n\n"
                 f"QR scan करके payment करो\n\n"
                 f"Payment के बाद यह भेजो:\n"
@@ -111,7 +118,7 @@ async def cb(client, query):
         )
     await query.answer()
 
-# --- ADMIN NOTIFICATION ---
+# --- ADMIN FLOW ---
 @app.on_message(filters.command("verify"))
 async def verify(client, message):
     if len(message.command) < 3: return
@@ -179,7 +186,7 @@ async def add_batch(client, message):
         disable_web_page_preview=True
     )
 
-# --- FINAL RUN COMMAND ---
+# --- EXECUTION ---
 if __name__ == "__main__":
-    keep_alive() # Background thread mein Flask chalu hoga
-    app.run()    # Yahan bot start hoga
+    keep_alive()
+    app.run()
