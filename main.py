@@ -11,7 +11,7 @@ from pyrogram.errors import UserNotParticipant
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
 
-# --- KEEP-ALIVE ---
+# --- KEEP-ALIVE LOGIC (Fixed for Bot Start) ---
 web = Flask('')
 @web.route('/')
 def home(): return "Bot is Running!"
@@ -21,9 +21,11 @@ def run_web():
     web.run(host='0.0.0.0', port=port)
 
 def keep_alive():
-    Thread(target=run_web).start()
+    t = Thread(target=run_web)
+    t.daemon = True # Isse Flask background mein chalega aur bot ko block nahi karega
+    t.start()
 
-# --- CONFIG ---
+# --- CONFIGURATION ---
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -56,7 +58,7 @@ async def start(client, message):
         return
 
     if len(message.command) < 2:
-        await message.reply_text("Welcome!") 
+        await message.reply_text("Welcome to Meme Store Hub Bot!") 
         return
 
     name = message.command[1].lower()
@@ -151,7 +153,6 @@ async def add_single(client, message):
     name = message.command[1].lower()
     await videos.update_one({"name": name}, {"$set": {"file_id": app.last_fid, "type": "single"}}, upsert=True)
     
-    # CLICK AND WATCH LINE ADDED
     await message.reply_text(
         f"Videos: 1\n\n"
         f"Click and Watch 👇\n"
@@ -170,7 +171,6 @@ async def add_batch(client, message):
     size = len(f_list)
     app.batch_data[OWNER_ID] = [] 
     
-    # CLICK AND WATCH LINE ADDED
     await message.reply_text(
         f"✅ **Batch Saved**\n\n"
         f"Videos: {size}\n\n"
@@ -179,6 +179,7 @@ async def add_batch(client, message):
         disable_web_page_preview=True
     )
 
+# --- FINAL RUN COMMAND ---
 if __name__ == "__main__":
-    keep_alive()
-    app.run()
+    keep_alive() # Background thread mein Flask chalu hoga
+    app.run()    # Yahan bot start hoga
