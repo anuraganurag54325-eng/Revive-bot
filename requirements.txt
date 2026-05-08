@@ -1,0 +1,7 @@
+pyrogram
+tgcrypto
+motor
+dnspython
+flask
+qrcode
+pillow
